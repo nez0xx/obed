@@ -1,0 +1,22 @@
+services:
+  db_comm_bot:
+    image: postgres:15
+    ports:
+      - "8889:5432"
+    environment:
+      POSTGRES_DB: "db_comm"
+      POSTGRES_USER: "root"
+      POSTGRES_PASSWORD: "root"
+    volumes:
+      - db_comm_bot_volume:/var/lib/postgresql/data
+
+  bot:
+    image: comm-bot:latest
+    env_file:
+      - .env
+    depends_on:
+      - db_comm_bot
+
+
+volumes:
+  db_comm_bot_volume:
