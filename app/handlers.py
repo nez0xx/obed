@@ -15,7 +15,7 @@ router = Router(name=__name__)
 
 @router.message(Command("prices", prefix="/!%"))
 async def buy_sub(message: types.Message):
-    await message.answer("Подписка\n1 месяц - 100руб.\nЧтобы не пополнять счёт каждый месяц, заплатите сразу за несколько месяцев вперёд.")
+    await message.answer("Подписка для участия в конкурсах\n1 месяц - 100руб.\nЧтобы не пополнять счёт каждый месяц, заплатите сразу за несколько месяцев вперёд.")
 
 
 @router.message(Command("buy", prefix="/!%"))
