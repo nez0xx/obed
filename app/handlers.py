@@ -13,6 +13,16 @@ from app.utils import validate_date, validate_time, convert_to_datetime
 router = Router(name=__name__)
 
 
+@router.message(Command("prices", prefix="/!%"))
+async def buy_sub(message: types.Message):
+    await message.answer("Подписка\n1 месяц - 100руб. ")
+
+
+@router.message(Command("buy", prefix="/!%"))
+async def buy_sub(message: types.Message):
+    await message.answer("Чтобы продолжить, введите сумму пополнения")
+
+
 @router.message(Command("cancel", "отмена", prefix="/!%"))
 async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
