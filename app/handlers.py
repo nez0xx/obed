@@ -18,6 +18,13 @@ async def buy_sub(message: types.Message):
     await message.answer("Подписка для участия в конкурсах\n1 месяц - 100руб.\nЧтобы не пополнять счёт каждый месяц, заплатите сразу за несколько месяцев вперёд.")
 
 
+@router.message(Command("start", prefix="/!%"))
+async def start(message: types.Message):
+    await message.answer("Привет! Это бот для розыгрышей в комментериях. Оплатите подписку и оставьте комментарий под указанным постом, чтоб получить шанс победить в конкурсе и получить приз")
+
+
+
+
 @router.message(Command("buy", prefix="/!%"))
 async def buy_sub(message: types.Message):
     await message.answer("Чтобы продолжить, введите сумму пополнения")
