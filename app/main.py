@@ -26,6 +26,8 @@ async def main():
     dp.update.middleware.register(SchedulerMiddleware(scheduler))
 
     logging.basicConfig(level=logging.INFO)
+    #logger = logging.getLogger('sqlalchemy.engine')
+    #logger.setLevel(logging.DEBUG)
     await dp.start_polling(bot)
 
 

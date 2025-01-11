@@ -3,17 +3,21 @@ from random import choice
 
 from aiogram import Bot
 from faststream.redis import RedisMessage
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
 from app.crud import get_user_comments_in_contest, get_contest_by_post_id, create_comment, get_user_by_id, create_user, \
     get_comments_by_contest_id, create_win, get_contest_winners, get_uncompleted_contests, get_all_contests, \
-    get_all_wins, get_all_comments
-from app.database import Comment, Contest
+    get_all_wins, get_all_comments, get_reaction_by_user_and_comment, create_reaction, get_reactions_by_message_id, \
+    get_comment_by_id
+from app.database import Comment, Contest, Reaction
 from app.exceptions import Conflict
 from app.database.db_helper import sessionmanager
 
 from app.broker_redis import broker
+from app.settings import settings
+from app.utils import format_message
 
 
 async def create_contest_service(start_dt: datetime, end_dt: datetime, post_id: int):
@@ -33,7 +37,7 @@ async def create_contest_service(start_dt: datetime, end_dt: datetime, post_id: 
     await session.close()
 
 
-async def create_comment_service(message_id: str, user_id: str, post_id: int, username: str | None):
+async def create_comment_service(message_id: int, user_id: str, post_id: int, username: str | None, name: str):
     session = sessionmanager.session()
 
     contest = await get_contest_by_post_id(session=session, post_id=post_id)
@@ -45,7 +49,7 @@ async def create_comment_service(message_id: str, user_id: str, post_id: int, us
     user = await get_user_by_id(session=session, user_id=user_id)
 
     if user is None:
-        await create_user(session=session, user_id=user_id, username=username)
+        await create_user(session=session, user_id=user_id, username=username, name=name)
     else:
 
         user_comments = await get_user_comments_in_contest(session=session, user_id=user_id, contest_id=contest_id)
@@ -59,7 +63,7 @@ async def create_comment_service(message_id: str, user_id: str, post_id: int, us
 
 @broker.publisher("userbot-channel")
 async def count_reactions(message_id: int) -> int:
-    await broker.connect("redis://localhost:6379")
+    await broker.connect(settings.REDIS_HOST)
     response: RedisMessage = await broker.request(
         message_id,
         channel="userbot-channel",
@@ -73,7 +77,7 @@ async def get_most_liked_comm(comments: list[Comment]) -> int:
     max_reactions = 0
     comm_idx = 0
     for i in range(len(comments)-1):
-        reactions = await count_reactions(comments[i].message_id)
+        reactions = await count_message_reactions_service(comments[i].id)
         if reactions > max_reactions:
             max_reactions = reactions
             comm_idx = i
@@ -114,7 +118,9 @@ async def complete_contest_service(session: AsyncSession, contest: Contest, with
     await create_win(session=session, contest_id=contest.id, win_type="random", user_id=user3.id)
 
     contest.completed = True
-
+    stmt = update(Contest).where(Contest.id == contest.id).values(completed=True)
+    await session.execute(stmt)
+    print("SOMETHING ")
     if with_commit:
         await session.commit()
     else:
@@ -146,21 +152,46 @@ async def complete_contests_task(bot: Bot):
         contests = await get_uncompleted_contests(session=session)
         for contest in contests:
             winners = await complete_contest_service(contest=contest, session=session)
+            msg = format_message(winners=winners)
+            await bot.send_message(chat_id=settings.CHIEF_CHAT_ID, text=msg)
         await session.commit()
-            # await bot.send_message(chat_id=settings.CHIEF_CHAT_ID, text="Завершён конкурс инвайтов")
 
 
 async def get_statistics_service() -> dict:
     async with sessionmanager.session() as session:
         contests_count = len(await get_all_contests(session=session))
-        winers_count = len(await get_all_wins(session=session))
+        winners_count = len(await get_all_wins(session=session))
         comments_count = len(await get_all_comments(session=session))
 
     return {
         "contests_count": contests_count,
-        "winners_count": winers_count,
+        "winners_count": winners_count,
         "comments_count": comments_count
     }
+
+
+async def create_reaction_service(user_id: str, message_id: int):
+    async with sessionmanager.session() as session:
+        comment = await get_comment_by_id(session=session, message_id=message_id)
+        if comment is None:
+            return
+
+        existing_reaction = await get_reaction_by_user_and_comment(
+            session=session,
+            user_id=user_id,
+            message_id=message_id
+        )
+
+        if existing_reaction:
+            return
+
+        await create_reaction(session=session, user_id=user_id, message_id=message_id)
+
+
+async def count_message_reactions_service(message_id: int) -> int:
+    async with sessionmanager.session() as session:
+        reactions = await get_reactions_by_message_id(session=session, message_id=message_id)
+    return len(reactions)
 
 
 

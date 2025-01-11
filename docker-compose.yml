@@ -10,12 +10,26 @@ services:
     volumes:
       - db_comm_bot_volume:/var/lib/postgresql/data
 
+
+  #bot_redis:
+    #image: redis:latest
+    #ports:
+      #- "9984:6379"
+
+  #userbot:
+    #image: user_bot:latest
+
+
   bot:
     image: comm-bot:latest
     env_file:
       - .env
     depends_on:
       - db_comm_bot
+      #- userbot
+
+
+
 
 
 volumes:

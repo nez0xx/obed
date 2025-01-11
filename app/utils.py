@@ -56,6 +56,16 @@ def format_date(date: datetime) -> str:
     return ".".join(reversed(str(date).split()[0].split("-")))
 
 
+def format_message(winners: dict) -> str:
+    msg = f'''
+Завершён конкурс! Список победителей:
+Наибольшее количество лайков - {winners['likes'].name} @{winners['likes'].username} id{winners['likes'].id}
+Комментарий под победителем - {winners['under'].name} @{winners['under'].username} id{winners['under'].id}
+Случайный комментарий - {winners['random'].name} @{winners['random'].username} id{winners['random'].id}
+'''
+    return msg
+
+
 
 
 

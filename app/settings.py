@@ -19,6 +19,8 @@ class Settings(SettingsWithLoadEnvVars):
     BOT_TOKEN: str
     DB_URL: str
     BOT_LINK: str
+    REDIS_HOST: str
+    CHIEF_CHAT_ID: int
 
 
 settings = Settings()

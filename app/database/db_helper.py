@@ -43,7 +43,7 @@ sessionmanager.init_db()
 class DatabaseHelper:
 
     def __init__(self):
-        self.engine = create_async_engine(url=settings.DB_URL)
+        self.engine = create_async_engine(url=settings.DB_URL, echo=True)
 
         self.session_factory = async_sessionmaker(
             bind=self.engine,

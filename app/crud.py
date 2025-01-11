@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.database import User, Win, Task
+from app.database import User, Win, Task, Reaction
 from app.database.db_model_contest import Contest
 from app.database.db_model_comment import Comment
 
@@ -48,7 +48,7 @@ async def get_contest_by_post_id(
 
 
 async def get_active_contests(session: AsyncSession) -> list[Contest]:
-    now = datetime.now()
+    now = datetime.utcnow() + timedelta(hours=3)
 
     stmt = (select(Contest)
             .where(Contest.start_time < now)
@@ -70,16 +70,23 @@ async def delete_contest(session: AsyncSession, contest_id: int, with_commit: bo
         await session.commit()
 
 
+async def get_comment_by_id(session: AsyncSession, message_id: int) -> Comment | None:
+    stmt = select(Comment).where(Comment.id == message_id)
+    result = await session.execute(stmt)
+    model = result.scalar_one_or_none()
+    return model
+
+
 async def create_comment(
         session: AsyncSession,
         contest_id: int,
-        message_id: str,
+        message_id: int,
         user_id: str,
         with_commit: bool = True,
 ):
     model = Comment(
         contest_id=contest_id,
-        message_id=message_id,
+        id=message_id,
         user_id=user_id
     )
 
@@ -119,15 +126,15 @@ async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
     return user
 
 
-async def create_user(session: AsyncSession, user_id: str, username: str):
-    model = User(id=user_id, username=username)
+async def create_user(session: AsyncSession, user_id: str, username: str, name: str):
+    model = User(id=user_id, username=username, name=name)
     session.add(model)
     await session.commit()
     return model
 
 
 async def get_comments_by_contest_id(session: AsyncSession, contest_id: int) -> list[Comment]:
-    stmt = select(Comment).where(Comment.contest_id == contest_id).order_by(Comment.message_id)
+    stmt = select(Comment).where(Comment.contest_id == contest_id).order_by(Comment.id)
     result = await session.execute(stmt)
     comments = result.scalars()
     return list(comments)
@@ -169,7 +176,7 @@ async def get_task_by_id(session: AsyncSession, task_id: int) -> Task | None:
 
 
 async def get_uncompleted_contests(session: AsyncSession) -> list[Contest]:
-    now = datetime.now()
+    now = datetime.utcnow() + timedelta(hours=3)
     stmt = select(Contest).where(Contest.completed == False).where(Contest.end_time < now)
     result = await session.execute(stmt)
     contests = result.scalars()
@@ -194,3 +201,24 @@ async def get_all_comments(session: AsyncSession) -> list[Comment]:
     result = await session.execute(stmt)
     comments = result.scalars()
     return list(comments)
+
+
+async def create_reaction(session: AsyncSession, user_id: str, message_id: int):
+    model = Reaction(user_id=user_id, comment_id=message_id)
+    session.add(model)
+    await session.commit()
+
+
+async def get_reaction_by_user_and_comment(session: AsyncSession, user_id: str, message_id: int) -> Reaction | None:
+    print(message_id, type(message_id))
+    stmt = select(Reaction).where(Reaction.comment_id == message_id).where(Reaction.user_id is user_id)
+    result = await session.execute(stmt)
+    model = result.scalar_one_or_none()
+    return model
+
+
+async def get_reactions_by_message_id(session: AsyncSession, message_id: int) -> list[Reaction]:
+    stmt = select(Reaction).where(Reaction.comment_id == message_id)
+    result = await session.execute(stmt)
+    reactions = list(result.scalars())
+    return reactions

@@ -5,12 +5,14 @@ from aiogram.fsm.context import FSMContext
 from app.database.db_helper import sessionmanager
 from app.exceptions import DetailedException
 from app.keyboards import get_date_kb, get_cancel_button, get_confirmation_kb, build_all_contests_kb
-from app.service import create_contest_service, create_comment_service, get_statistics_service
+from app.service import create_contest_service, create_comment_service, get_statistics_service, create_reaction_service
 from app.states import Contest
 from app.utils import validate_date, validate_time, convert_to_datetime
 
 
 router = Router(name=__name__)
+
+
 
 
 @router.message(Command("prices", prefix="/!%"))
@@ -167,6 +169,16 @@ async def get_stat(message: types.Message):
     await message.answer(msg)
 
 
+@router.message_reaction()
+async def handle_reaction(message_reaction: types.MessageReactionUpdated):
+    if message_reaction.user is None:
+        return
+    u_id = str(message_reaction.user.id)
+    m_id = message_reaction.message_id
+
+    await create_reaction_service(user_id=u_id, message_id=m_id)
+
+
 @router.message()
 async def echo(message: types.Message):
     if message.reply_to_message:
@@ -174,7 +186,8 @@ async def echo(message: types.Message):
             post_id = message.reply_to_message.forward_from_message_id
             await create_comment_service(
                 user_id=str(message.from_user.id),
-                message_id=str(message.message_id),
+                message_id=message.message_id,
                 post_id=post_id,
-                username=message.from_user.username
+                username=message.from_user.username,
+                name=message.from_user.full_name
             )

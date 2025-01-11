@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Router
 from aiogram.filters.callback_data import CallbackData
@@ -9,7 +9,7 @@ from app.database.db_helper import sessionmanager
 from app.keyboards import build_all_contests_kb, build_contest_info_kb, AllContestsCbData, ContestInfoCbData, \
     CompleteContestCbData
 from app.service import get_contest_winners_service, complete_contest_service
-from app.utils import format_date
+from app.utils import format_date, format_message
 
 router = Router(name=__name__)
 
@@ -24,12 +24,12 @@ async def contest_info_callback(
     contest_id = callback_data.contest_id
     contest = await get_contest_by_id(session=session, contest_id=contest_id)
 
-    now = datetime.now()
-    is_active = contest.start_time < now < contest.end_time
+    now = datetime.utcnow() + timedelta(hours=3)
+    is_active = contest.start_time < now < contest.end_time and contest.completed == False
 
     winners = await get_contest_winners_service(contest_id=contest_id)
     winners_count = len(winners)
-    winners = ("\n".join([f"@{winners[key].username} - {key}" for key in winners])
+    winners = ("\n".join([f"{winners[key].name} @{winners[key].username} id{winners[key].id} - {key}" for key in winners])
                .replace("likes", "лайки")
                .replace('random', 'рандом')
                .replace('under', 'комментарий под победедителем'))
@@ -40,12 +40,12 @@ async def contest_info_callback(
     comms = len(await get_comments_by_contest_id(session=session, contest_id=contest_id))
 
     msg = f"""
-📗Информация о конкурсе
-📅Дата начала: {start_date}
-📅Дата окончания: {end_date}
-🧑🏻Количество участников: {participicants}
-✉️Количество комментариев: {comms}
-🏆Победители: 
+📗 Информация о конкурсе
+📅 Дата начала: {start_date}
+📅 Дата окончания: {end_date}
+🧑🏻 Количество участников: {participicants}
+✉️ Количество комментариев: {comms}
+🏆 Победители: 
 {winners}
 """
     await session.close()
@@ -67,8 +67,9 @@ async def handle_delete_contest_callback(
 ):
     async with sessionmanager.session() as session:
         contest = await get_contest_by_id(session=session, contest_id=callback_data.contest_id)
-        await complete_contest_service(session=session, contest=contest)
-        await callback_query.answer(
-            text=f"Конкурс завершён"
-        )
+        winners = await complete_contest_service(session=session, contest=contest)
+        msg = format_message(winners=winners)
+        await callback_query.message.answer(msg)
+        await session.commit()
+
 

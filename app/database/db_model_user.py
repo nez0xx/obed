@@ -10,4 +10,5 @@ if TYPE_CHECKING:
 class User(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(nullable=True)
+    name: Mapped[str]
     wins_relationship: Mapped[list["Win"]] = relationship(back_populates="user_relationship")
