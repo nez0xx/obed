@@ -2,7 +2,6 @@ from datetime import datetime
 from random import choice
 
 from aiogram import Bot
-from faststream.redis import RedisMessage
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,12 +9,11 @@ from app import crud
 from app.crud import get_user_comments_in_contest, get_contest_by_post_id, create_comment, get_user_by_id, create_user, \
     get_comments_by_contest_id, create_win, get_contest_winners, get_uncompleted_contests, get_all_contests, \
     get_all_wins, get_all_comments, get_reaction_by_user_and_comment, create_reaction, get_reactions_by_message_id, \
-    get_comment_by_id
+    get_comment_by_id, get_win_by_contest_and_user, get_contest_participants
 from app.database import Comment, Contest, Reaction
 from app.exceptions import Conflict
 from app.database.db_helper import sessionmanager
 
-from app.broker_redis import broker
 from app.settings import settings
 from app.utils import format_message
 
@@ -61,18 +59,6 @@ async def create_comment_service(message_id: int, user_id: str, post_id: int, us
     await session.close()
 
 
-@broker.publisher("userbot-channel")
-async def count_reactions(message_id: int) -> int:
-    await broker.connect(settings.REDIS_HOST)
-    response: RedisMessage = await broker.request(
-        message_id,
-        channel="userbot-channel",
-        timeout=1
-    )
-    res = await response.decode()
-    return int(res)
-
-
 async def get_most_liked_comm(comments: list[Comment]) -> int:
     max_reactions = 0
     comm_idx = 0
@@ -84,10 +70,25 @@ async def get_most_liked_comm(comments: list[Comment]) -> int:
     return comm_idx
 
 
+async def create_win_service(session: AsyncSession, contest_id: int, user_id: int, win_type: str):
+    existing_win = await get_win_by_contest_and_user(session=session, contest_id=contest_id, user_id=user_id)
+    if existing_win:
+        return
+    await create_win(session=session, contest_id=contest_id, win_type=win_type, user_id=user_id)
+
+
 async def complete_contest_service(session: AsyncSession, contest: Contest, with_commit: bool = False) -> dict | None:
 
     comments = await get_comments_by_contest_id(session=session, contest_id=contest.id)
-    if len(comments) < 3:
+    participants = await get_contest_participants(session=session, contest_id=contest.id)
+    
+    if len(comments) < 3 or len(participants) < 3:
+        stmt = update(Contest).where(Contest.id == contest.id).values(completed=True)
+        await session.execute(stmt)
+        if with_commit:
+            await session.commit()
+        else:
+            await session.flush()
         return None
 
     most_liked_comm_idx = await get_most_liked_comm(comments)
@@ -113,9 +114,9 @@ async def complete_contest_service(session: AsyncSession, contest: Contest, with
     user2 = await get_user_by_id(session=session, user_id=comm_under_previous_comm.user_id)
     user3 = await get_user_by_id(session=session, user_id=random_comm.user_id)
 
-    await create_win(session=session, contest_id=contest.id, win_type="likes", user_id=user1.id)
-    await create_win(session=session, contest_id=contest.id, win_type="under", user_id=user2.id)
-    await create_win(session=session, contest_id=contest.id, win_type="random", user_id=user3.id)
+    await create_win_service(session=session, contest_id=contest.id, win_type="likes", user_id=user1.id)
+    await create_win_service(session=session, contest_id=contest.id, win_type="under", user_id=user2.id)
+    await create_win_service(session=session, contest_id=contest.id, win_type="random", user_id=user3.id)
 
     contest.completed = True
     stmt = update(Contest).where(Contest.id == contest.id).values(completed=True)
@@ -152,8 +153,9 @@ async def complete_contests_task(bot: Bot):
         contests = await get_uncompleted_contests(session=session)
         for contest in contests:
             winners = await complete_contest_service(contest=contest, session=session)
-            msg = format_message(winners=winners)
-            await bot.send_message(chat_id=settings.CHIEF_CHAT_ID, text=msg)
+            if winners is not None:
+                msg = format_message(winners=winners)
+                await bot.send_message(chat_id=settings.CHIEF_CHAT_ID, text=msg)
         await session.commit()
 
 

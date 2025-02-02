@@ -116,7 +116,7 @@ async def get_all_contests(session: AsyncSession, offset: int = 0, limit: int | 
         stmt = stmt.limit(limit+1)
     result = await session.execute(stmt)
     contests = result.scalars()
-    return list(contests)
+    return list(contests)[::-1]
 
 
 async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
@@ -140,6 +140,13 @@ async def get_comments_by_contest_id(session: AsyncSession, contest_id: int) -> 
     return list(comments)
 
 
+async def get_win_by_contest_and_user(session, contest_id, user_id) -> Win | None:
+    stmt = select(Win).where(Win.contest_id == contest_id).where(Win.user_id == user_id)
+    result = await session.execute(stmt)
+    model = result.scalar_one_or_none()
+    return model
+
+
 async def create_win(session: AsyncSession, contest_id: int, win_type: str, user_id: int, with_commit: bool = False):
     model = Win(
         contest_id=contest_id,
@@ -160,6 +167,13 @@ async def get_contest_winners(session: AsyncSession, contest_id: int) -> list[Wi
     wins = list(result.scalars())
 
     return wins
+
+
+async def get_contest_participants(session: AsyncSession, contest_id: int) -> list[User]:
+    stmt = select(Comment).where(Comment.contest_id == contest_id)
+    result = await session.execute(stmt)
+    participants = list(set([comm.user_id for comm in result.scalars()]))
+    return participants
 
 
 async def create_task(session: AsyncSession, contest_id: int, task_id: int):
